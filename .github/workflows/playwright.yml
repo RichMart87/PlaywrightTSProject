@@ -1,0 +1,131 @@
+name: Playwright Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Nightly regression + e2e + api run at 03:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Suite to run manually (smoke, regression, e2e, api, all)'
+        required: false
+        default: 'all'
+        type: choice
+        options: [smoke, regression, e2e, api, all]
+
+env:
+  UI_BASE_URL: https://automationexercise.com
+  API_BASE_URL: https://automationexercise.com
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+
+  smoke:
+    name: Smoke tests
+    needs: lint-and-typecheck
+    if: github.event_name != 'workflow_dispatch' || contains(fromJSON('["smoke","all"]'), github.event.inputs.suite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-smoke
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  api:
+    name: API tests
+    needs: lint-and-typecheck
+    if: github.event_name != 'workflow_dispatch' || contains(fromJSON('["api","all"]'), github.event.inputs.suite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:api
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-api
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  regression:
+    name: Regression (${{ matrix.browser }})
+    needs: [smoke, api]
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["regression","all"]'), github.event.inputs.suite))
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npx playwright test --project=regression-${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-regression-${{ matrix.browser }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  e2e:
+    name: End-to-end tests
+    needs: [smoke, api]
+    if: github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && contains(fromJSON('["e2e","all"]'), github.event.inputs.suite))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-e2e
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
