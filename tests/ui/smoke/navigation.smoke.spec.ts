@@ -3,6 +3,8 @@ import { test, expect } from '@fixtures/index';
 test.describe('Smoke: Core navigation', () => {
   test('home page loads with title and key nav links visible @smoke', async ({ page, homePage }) => {
     await homePage.goto();
+    // "one moment, please.." suggests page is still loading trying to wait for network idle state before asserting title and nav links
+    await page.waitForLoadState('networkidle');
 
     await expect(page).toHaveTitle(/Automation Exercise/i);
     await expect(homePage.productsLink).toBeVisible();
