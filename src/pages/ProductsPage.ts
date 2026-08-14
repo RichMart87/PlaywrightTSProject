@@ -38,6 +38,8 @@ export class ProductsPage extends BasePage {
 
   async addProductToCartByIndex(index: number): Promise<void> {
     const card = this.productCards.nth(index);
+    // Scroll into view and hover to ensure the "Add to cart" button is visible and clickable
+    await card.scrollIntoViewIfNeeded();
     await card.hover();
     await card.getByText('Add to cart').first().click();
   }
